@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PERWER Solar — Live Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #0a0f0d;
+    --surface:   #111a15;
+    --card:      #162019;
+    --border:    #1f3025;
+    --accent:    #00e87a;
+    --accent2:   #00b85e;
+    --warn:      #f5a623;
+    --danger:    #ff4d4d;
+    --text:      #e8f5ec;
+    --muted:     #5a7a62;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,232,122,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,232,122,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,15,13,0.9);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo h1 {
+    font-family: var(--font-head);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .device-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+
+  .status-dot.online  { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+  .status-dot.offline { background: var(--danger); }
+  .status-dot.stale   { background: var(--warn); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  #last-updated {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── Alerts Banner ── */
+  #alerts-banner {
+    position: relative;
+    z-index: 10;
+    display: none;
+    padding: 10px 32px;
+    background: rgba(255,77,77,0.1);
+    border-bottom: 1px solid rgba(255,77,77,0.3);
+    font-size: 12px;
+    color: #ff8080;
+  }
+
+  #alerts-list { display: flex; gap: 16px; flex-wrap: wrap; }
+  .alert-item::before { content: '⚠ '; }
+
+  /* ── Main Layout ── */
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px 32px;
+  }
+
+  /* ── Section Label ── */
+  .section-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    margin-top: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Stat Cards ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, transform 0.2s;
+  }
+
+  .card:hover {
+    border-color: var(--accent2);
+    transform: translateY(-2px);
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .card:hover::before { opacity: 1; }
+
+  .card-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .card-value {
+    font-family: var(--font-head);
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .card-value.warn   { color: var(--warn); }
+  .card-value.danger { color: var(--danger); }
+
+  .card-unit {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .card-icon {
+    position: absolute;
+    top: 16px; right: 16px;
+    font-size: 20px;
+    opacity: 0.2;
+  }
+
+  /* Battery state badge */
+  .batt-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 6px;
+  }
+
+  .batt-badge.charging    { background: rgba(0,232,122,0.15); color: var(--accent); }
+  .batt-badge.discharging { background: rgba(245,166,35,0.15); color: var(--warn); }
+  .batt-badge.idle        { background: rgba(90,122,98,0.2);  color: var(--muted); }
+
+  /* ── Charts Grid ── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .cards-grid  { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .chart-title {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chart-title span {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  .chart-wrap { position: relative; height: 200px; }
+
+  /* ── Alerts Section ── */
+  .alerts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .alert-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid;
+    font-size: 13px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .alert-card.warn   { background: rgba(245,166,35,0.08); border-color: rgba(245,166,35,0.3); color: var(--warn); }
+  .alert-card.danger { background: rgba(255,77,77,0.08);  border-color: rgba(255,77,77,0.3);  color: #ff8080; }
+  .alert-card.info   { background: rgba(0,232,122,0.06);  border-color: rgba(0,232,122,0.2);  color: var(--accent); }
+
+  .alert-icon { font-size: 18px; }
+  .alert-time { margin-left: auto; font-size: 11px; opacity: 0.6; }
+
+  .no-alerts {
+    text-align: center;
+    padding: 30px;
+    color: var(--muted);
+    font-size: 13px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  /* ── Footer ── */
+  footer {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  /* ── Loading overlay ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    gap: 16px;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #loading p {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>CONNECTING TO PERWER...</p>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">☀</div>
+    <h1>PER<span>WER</span> Solar</h1>
+  </div>
+  <div class="header-right">
+    <div class="device-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connecting...</span>
+    </div>
+    <div id="last-updated">—</div>
+  </div>
+</header>
+
+<!-- Alerts Banner (shows when critical alerts exist) -->
+<div id="alerts-banner">
+  <div id="alerts-list"></div>
+</div>
+
+<main>
+
+  <!-- PV Array -->
+  <div class="section-label">PV Array</div>
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-label">PV Voltage</div>
+      <div class="card-value" id="pv_voltage">—</div>
+      <div class="card-unit">Volts DC</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">〜</div>
+      <div class="card-label">PV Current</div>
+      <div class="card-value" id="pv_current">—</div>
+      <div class="card-unit">Amps DC</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">◈</div>
+      <div class="card-label">PV Power</div>
+      <div class="card-value" id="pv_power">—</div>
+      <div class="card-unit">Watts</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🌡</div>
+      <div class="card-label">Panel Temp</div>
+      <div class="card-value" id="pv_temperature">—</div>
+      <div class="card-unit">°Celsius</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">☀</div>
+      <div class="card-label">Irradiance</div>
+      <div class="card-value" id="irradiance">—</div>
+      <div class="card-unit">W/m²</div>
+    </div>
+  </div>
+
+  <!-- Inverter / AC Output -->
+  <div class="section-label">Inverter / AC Output</div>
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-label">AC Voltage</div>
+      <div class="card-value" id="ac_voltage">—</div>
+      <div class="card-unit">Volts AC</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">〜</div>
+      <div class="card-label">AC Current</div>
+      <div class="card-value" id="ac_current">—</div>
+      <div class="card-unit">Amps AC</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">◈</div>
+      <div class="card-label">AC Power</div>
+      <div class="card-value" id="ac_power">—</div>
+      <div class="card-unit">Watts</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">≋</div>
+      <div class="card-label">Frequency</div>
+      <div class="card-value" id="frequency">—</div>
+      <div class="card-unit">Hz</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">◎</div>
+      <div class="card-label">Power Factor</div>
+      <div class="card-value" id="power_factor">—</div>
+      <div class="card-unit">0 – 1</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">⊡</div>
+      <div class="card-label">Energy Today</div>
+      <div class="card-value" id="energy_kwh">—</div>
+      <div class="card-unit">kWh</div>
+    </div>
+  </div>
+
+  <!-- Battery -->
+  <div class="section-label">Battery Bank</div>
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-icon">🔋</div>
+      <div class="card-label">Batt Voltage</div>
+      <div class="card-value" id="batt_voltage">—</div>
+      <div class="card-unit">Volts DC</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">〜</div>
+      <div class="card-label">Batt Current</div>
+      <div class="card-value" id="batt_current">—</div>
+      <div class="card-unit">Amps</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">◈</div>
+      <div class="card-label">Batt Power</div>
+      <div class="card-value" id="batt_power">—</div>
+      <div class="card-unit">Watts</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🌡</div>
+      <div class="card-label">Batt Temp</div>
+      <div class="card-value" id="batt_temperature">—</div>
+      <div class="card-unit">°Celsius</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">↕</div>
+      <div class="card-label">Status</div>
+      <div class="card-value" style="font-size:14px; margin-top:4px;">
+        <span class="batt-badge" id="batt_state">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Environment -->
+  <div class="section-label">Environment</div>
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-icon">🌡</div>
+      <div class="card-label">Ambient Temp</div>
+      <div class="card-value" id="amb_temperature">—</div>
+      <div class="card-unit">°Celsius</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">💧</div>
+      <div class="card-label">Humidity</div>
+      <div class="card-value" id="humidity">—</div>
+      <div class="card-unit">% RH</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="section-label">Historical Charts</div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title"><span></span> PV Power (W)</div>
+      <div class="chart-wrap"><canvas id="chart-pv"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span style="background:var(--warn)"></span> Battery Voltage (V)</div>
+      <div class="chart-wrap"><canvas id="chart-batt"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span style="background:#00bfff"></span> AC Power (W)</div>
+      <div class="chart-wrap"><canvas id="chart-ac"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><span style="background:#b45aff"></span> Temperature (°C)</div>
+      <div class="chart-wrap"><canvas id="chart-temp"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="section-label">Alerts & Notifications</div>
+  <div class="alerts-grid" id="alerts-container">
+    <div class="no-alerts">No alerts — system operating normally ✓</div>
+  </div>
+
+</main>
+
+<footer>
+  PERWER Solar Monitor &nbsp;·&nbsp; Live data via Supabase &nbsp;·&nbsp; Device: <span id="footer-device">—</span>
+</footer>
+
+<!-- ================================================================
+     SUPABASE + DASHBOARD LOGIC
+================================================================ -->
+<script type="module">
+  // ── Supabase credentials ──────────────────────────────────────
+  const SUPABASE_URL = 'https://xasxikdrorfjjbszhbzn.supabase.co'
+  const SUPABASE_KEY = 'sb_publishable_qeWOQkVbkWmNoXCaNP2q-A_xk0fPQyZ'
+  const TABLE        = 'solar_readings'
+  const DEVICE_ID    = 'PERWER-001'
+
+  // ── Alert thresholds ──────────────────────────────────────────
+  const THRESHOLDS = {
+    pv_temperature:   { max: 75,   label: 'Panel temperature critical' },
+    batt_temperature: { max: 50,   label: 'Battery overheating' },
+    batt_voltage:     { min: 22,   label: 'Battery voltage critically low' },
+    ac_voltage:       { min: 200, max: 240, label: 'AC voltage out of range' },
+    humidity:         { max: 90,   label: 'High humidity detected' },
+  }
+
+  // ── Chart history (last 20 readings) ─────────────────────────
+  const MAX_POINTS = 20
+  const history = { labels: [], pv_power: [], batt_voltage: [], ac_power: [], pv_temp: [], batt_temp: [] }
+
+  // ── Chart.js defaults ─────────────────────────────────────────
+  Chart.defaults.color          = '#5a7a62'
+  Chart.defaults.borderColor    = '#1f3025'
+  Chart.defaults.font.family    = "'Space Mono', monospace"
+  Chart.defaults.font.size      = 10
+
+  const chartOptions = (color) => ({
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 400 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(31,48,37,0.8)' }, ticks: { maxTicksLimit: 6 } },
+      y: { grid: { color: 'rgba(31,48,37,0.8)' }, ticks: { maxTicksLimit: 5 } }
+    }
+  })
+
+  const makeChart = (id, color) => new Chart(document.getElementById(id), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [], borderColor: color, backgroundColor: color + '18',
+        borderWidth: 2, pointRadius: 2, fill: true, tension: 0.4
+      }]
+    },
+    options: chartOptions(color)
+  })
+
+  const charts = {
+    pv:   makeChart('chart-pv',   '#00e87a'),
+    batt: makeChart('chart-batt', '#f5a623'),
+    ac:   makeChart('chart-ac',   '#00bfff'),
+    temp: makeChart('chart-temp', '#b45aff'),
+  }
+
+  // ── Update chart with new point ───────────────────────────────
+  function pushChart(chart, label, value) {
+    const d = chart.data
+    if (d.labels.length >= MAX_POINTS) {
+      d.labels.shift()
+      d.datasets[0].data.shift()
+    }
+    d.labels.push(label)
+    d.datasets[0].data.push(parseFloat(value.toFixed(2)))
+    chart.update('none')
+  }
+
+  // ── Format number ─────────────────────────────────────────────
+  const fmt = (v, d=1) => v == null ? '—' : parseFloat(v).toFixed(d)
+
+  // ── Update a stat card value ──────────────────────────────────
+  function setCard(id, value, decimals=1) {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.textContent = fmt(value, decimals)
+    el.className = 'card-value'
+  }
+
+  // ── Check thresholds and return alert list ────────────────────
+  function checkAlerts(row) {
+    const alerts = []
+    for (const [field, rule] of Object.entries(THRESHOLDS)) {
+      const v = row[field]
+      if (v == null) continue
+      if (rule.max && v > rule.max) alerts.push({ type: 'danger', msg: `${rule.label}: ${fmt(v)}` })
+      if (rule.min && v < rule.min) alerts.push({ type: 'warn',   msg: `${rule.label}: ${fmt(v)}` })
+    }
+    return alerts
+  }
+
+  // ── Render alert cards ────────────────────────────────────────
+  function renderAlerts(alerts, time) {
+    const container  = document.getElementById('alerts-container')
+    const banner     = document.getElementById('alerts-banner')
+    const bannerList = document.getElementById('alerts-list')
+
+    if (alerts.length === 0) {
+      container.innerHTML = '<div class="no-alerts">No alerts — system operating normally ✓</div>'
+      banner.style.display = 'none'
+      return
+    }
+
+    container.innerHTML = alerts.map(a => `
+      <div class="alert-card ${a.type}">
+        <span class="alert-icon">${a.type === 'danger' ? '🔴' : '🟡'}</span>
+        <span>${a.msg}</span>
+        <span class="alert-time">${time}</span>
+      </div>
+    `).join('')
+
+    const critical = alerts.filter(a => a.type === 'danger')
+    if (critical.length > 0) {
+      banner.style.display = 'block'
+      bannerList.innerHTML = critical.map(a => `<span class="alert-item">${a.msg}</span>`).join('')
+    } else {
+      banner.style.display = 'none'
+    }
+  }
+
+  // ── Update device status indicator ───────────────────────────
+  let lastDataTime = null
+
+  function updateStatus(timestamp) {
+    lastDataTime = new Date(timestamp)
+    const dot  = document.getElementById('status-dot')
+    const text = document.getElementById('status-text')
+    const upd  = document.getElementById('last-updated')
+    const now  = new Date()
+    const diff = (now - lastDataTime) / 1000
+
+    if (diff < 90) {
+      dot.className  = 'status-dot online'
+      text.textContent = `PERWER-001 · Online`
+      text.style.color = 'var(--accent)'
+    } else if (diff < 300) {
+      dot.className  = 'status-dot stale'
+      text.textContent = `PERWER-001 · Stale`
+      text.style.color = 'var(--warn)'
+    } else {
+      dot.className  = 'status-dot offline'
+      text.textContent = `PERWER-001 · Offline`
+      text.style.color = 'var(--danger)'
+    }
+
+    upd.textContent = `Last update: ${lastDataTime.toLocaleTimeString()}`
+  }
+
+  // Re-check device status every 30s even without new data
+  setInterval(() => {
+    if (lastDataTime) {
+      const diff = (new Date() - lastDataTime) / 1000
+      if (diff > 90) updateStatus(lastDataTime.toISOString())
+    }
+  }, 30000)
+
+  // ── Render full row of data ───────────────────────────────────
+  function renderRow(row) {
+    const time = new Date(row.timestamp || Date.now()).toLocaleTimeString()
+
+    // PV
+    setCard('pv_voltage',     row.pv_voltage, 1)
+    setCard('pv_current',     row.pv_current, 2)
+    setCard('pv_power',       row.pv_power,   1)
+    setCard('pv_temperature', row.pv_temperature, 1)
+    setCard('irradiance',     row.irradiance, 0)
+
+    // Color panel temp if hot
+    const pvTempEl = document.getElementById('pv_temperature')
+    if (row.pv_temperature > 70)       pvTempEl.classList.add('danger')
+    else if (row.pv_temperature > 60)  pvTempEl.classList.add('warn')
+
+    // AC
+    setCard('ac_voltage',   row.ac_voltage, 1)
+    setCard('ac_current',   row.ac_current, 2)
+    setCard('ac_power',     row.ac_power,   1)
+    setCard('frequency',    row.frequency,  2)
+    setCard('power_factor', row.power_factor, 2)
+    setCard('energy_kwh',   row.energy_kwh, 2)
+
+    // Battery
+    setCard('batt_voltage',     row.batt_voltage, 1)
+    setCard('batt_current',     row.batt_current, 2)
+    setCard('batt_power',       row.batt_power,   1)
+    setCard('batt_temperature', row.batt_temperature, 1)
+
+    const stateEl = document.getElementById('batt_state')
+    const state   = (row.batt_state || 'idle').toLowerCase()
+    stateEl.textContent = state
+    stateEl.className   = `batt-badge ${state}`
+
+    const battTempEl = document.getElementById('batt_temperature')
+    if (row.batt_temperature > 50)      battTempEl.classList.add('danger')
+    else if (row.batt_temperature > 45) battTempEl.classList.add('warn')
+
+    // Environment
+    setCard('amb_temperature', row.amb_temperature, 1)
+    setCard('humidity',        row.humidity,        1)
+
+    // Charts
+    pushChart(charts.pv,   time, row.pv_power       || 0)
+    pushChart(charts.batt, time, row.batt_voltage    || 0)
+    pushChart(charts.ac,   time, row.ac_power        || 0)
+    pushChart(charts.temp, time, row.pv_temperature  || 0)
+
+    // Alerts
+    renderAlerts(checkAlerts(row), time)
+
+    // Status
+    updateStatus(row.timestamp || new Date().toISOString())
+
+    // Footer
+    document.getElementById('footer-device').textContent = row.device_id || DEVICE_ID
+  }
+
+  // ── Fetch last 20 rows for chart history ─────────────────────
+  async function loadHistory() {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${TABLE}?device_id=eq.${DEVICE_ID}&order=timestamp.desc&limit=20`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    )
+    const rows = await res.json()
+    if (!Array.isArray(rows) || rows.length === 0) return
+
+    // Render newest first for cards, reverse for charts
+    renderRow(rows[0])
+    ;[...rows].reverse().forEach(row => {
+      const t = new Date(row.timestamp).toLocaleTimeString()
+      pushChart(charts.pv,   t, row.pv_power      || 0)
+      pushChart(charts.batt, t, row.batt_voltage   || 0)
+      pushChart(charts.ac,   t, row.ac_power       || 0)
+      pushChart(charts.temp, t, row.pv_temperature || 0)
+    })
+  }
+
+  // ── Supabase Realtime subscription ───────────────────────────
+  async function subscribeRealtime() {
+    // Dynamically import Supabase JS client from CDN
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm')
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    supabase
+      .channel('solar-live')
+      .on('postgres_changes', {
+        event:  'INSERT',
+        schema: 'public',
+        table:  TABLE,
+        filter: `device_id=eq.${DEVICE_ID}`
+      }, payload => {
+        console.log('[PERWER] New data:', payload.new)
+        renderRow(payload.new)
+      })
+      .subscribe(status => {
+        console.log('[PERWER] Realtime status:', status)
+      })
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────
+  async function init() {
+    try {
+      await loadHistory()
+      await subscribeRealtime()
+    } catch (err) {
+      console.error('[PERWER] Init error:', err)
+      document.getElementById('status-text').textContent = 'Connection error'
+      document.getElementById('status-dot').className = 'status-dot offline'
+    } finally {
+      // Hide loading screen
+      document.getElementById('loading').style.opacity = '0'
+      document.getElementById('loading').style.transition = 'opacity 0.5s'
+      setTimeout(() => document.getElementById('loading').style.display = 'none', 500)
+    }
+  }
+
+  init()
+</script>
+</body>
+</html>
